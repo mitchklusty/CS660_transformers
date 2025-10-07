@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
+import math
 
 from lm.utils import count_params
 
@@ -86,7 +87,7 @@ class MultiHeadAttention(nn.Module):
         kT = k.transpose(-2, -1)
 
         return q, kT, v
-
+        
     def self_attention(
         self,
         q: torch.FloatTensor,
@@ -107,10 +108,9 @@ class MultiHeadAttention(nn.Module):
         Returns:
             attn: Outputs of applying multi-head attention to the inputs (B, S, D)
         """
-
-        # compute the attention weights using q and kT
-        qkT = torch.matmul(q, kT)  # (B, H, S, S)
-        unmasked_attn_logits = qkT * self.scale_factor
+        # q, kT, v: (B, H, S, Hd)
+        d_k = q.size(-1)
+        unmasked_attn_logits = torch.matmul(q, kT) / math.sqrt(d_k)  # (B, H, S, S)
 
         """
         In decoder models, attention logits are masked such that computation at
@@ -177,43 +177,29 @@ class MultiHeadAttention(nn.Module):
         q, kT and v.
         """
 
-        # Combine causal mask with attention mask if provided
         if attention_mask is None:
-            mask = causal_mask
+            mask = causal_mask.unsqueeze(0).unsqueeze(0)  # (1, 1, S, S)
         else:
-            # attention_mask is (B, S), we need to create (B, 1, S, S) mask
-            # Position i can attend to position j if:
-            # 1. j <= i (causal)
-            # 2. attention_mask[i] == 1 and attention_mask[j] == 1
-            attention_mask_expanded = attention_mask.unsqueeze(1).unsqueeze(2)  # (B, 1, 1, S)
-            attention_mask_2d = attention_mask_expanded * attention_mask.unsqueeze(1).unsqueeze(3)  # (B, 1, S, S)
-            mask = causal_mask.unsqueeze(0).unsqueeze(0) & (attention_mask_2d.bool())  # (B, 1, S, S)
-
+            attention_mask = attention_mask.bool()  # (B, S)
+            key_mask = attention_mask.unsqueeze(1).unsqueeze(2)  # (B, 1, 1, S)
+            mask = causal_mask.unsqueeze(0).unsqueeze(0) & key_mask  # (B, 1, S, S)
+            
         """
         Fill unmasked_attn_logits with **float_min** wherever causal mask has value False.
 
         Hint: torch.masked_fill
         """
-        # compute the attention weights using q and kT
-        
-
-        
-
-        
-
-        # Apply mask: fill positions where mask is False with float_min
         float_min = torch.finfo(q.dtype).min
-        attn_logits = unmasked_attn_logits.masked_fill(~mask, float_min)
+        attn_logits = unmasked_attn_logits.masked_fill(~mask, float_min)  # (B, H, S, S)
         attn_weights = F.softmax(attn_logits, dim=-1)
-        attn_weights = self.dropout(attn_weights)
+        attn_out = torch.matmul(attn_weights, v)  # (B, H, S, Hd)
 
-        # scale value by the attention weights
-        attn = torch.matmul(attn_weights, v)  # (B, H, S, HD)
-        
-        # Reshape back to (B, S, D)
-        attn = rearrange(attn, "b h s hd -> b s (h hd)")
+        # Zero out invalid query positions
+        if attention_mask is not None:
+            attn_out = attn_out * attention_mask.unsqueeze(1).unsqueeze(-1)
 
-        return attn
+        attn_out = rearrange(attn_out, "b h s hd -> b s (h hd)")
+        return attn_out
 
     def projection(self, attn: torch.FloatTensor) -> torch.FloatTensor:
         """Apply a dropout and a linear projection to outputs of attention"""

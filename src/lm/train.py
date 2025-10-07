@@ -50,15 +50,13 @@ def random_batch_sampler(
     """
 
     num_tokens = len(tokens)
-    max_start = num_tokens - seq_len
+    if num_tokens < seq_len:
+        raise ValueError("tokens length must be >= seq_len for sampling")
+    max_start = num_tokens - seq_len+1
     
     while True:
-        # Sample random starting positions for each sequence in the batch
         start_indices = torch.randint(0, max_start, (batch_size,))
-        
-        # Create batch by gathering contiguous sequences
         batch = torch.stack([tokens[start:start + seq_len] for start in start_indices])
-        
         yield batch.to(device)
 
 
@@ -124,13 +122,14 @@ def cosine_lr_schedule(
         if t <= num_warmup_steps:
             # Linear warmup
             lr = (max_lr / num_warmup_steps) * t
+            # lr = min_lr + (max_lr - min_lr) * t / num_warmup_steps
         elif t >= num_training_steps:
-            # After training, stay at minimum
+            # After training, stay at min lr
             lr = min_lr
         else:  # num_warmup_steps < t < num_training_steps
             # Cosine decay
-            progress = (t - num_warmup_steps) / (num_training_steps - num_warmup_steps)
-            lr = min_lr + (max_lr - min_lr) * 0.5 * (1 + math.cos(math.pi * progress))
+            progress = math.pi * (t - num_warmup_steps) / (num_training_steps - num_warmup_steps)
+            lr = min_lr + ((max_lr - min_lr)/2) * (1 + math.cos( progress))
         return lr
 
     return get_lr
@@ -192,9 +191,10 @@ def train(
         grad_accumulation_steps: number of "micro" training steps before each
           gradient update
     """
+
     # stores training losses for the 20 latest steps
     losses = deque(maxlen=20 * grad_accumulation_steps)
-
+    
     for step in (pbar := trange(num_training_steps)):
         t0 = time.time()
         lr = lr_schedule(step)
@@ -204,7 +204,7 @@ def train(
             # Sample a batch, generate logits and compute loss
             input_ids = next(batch_sampler)
             with autocast:
-                logits = model(input_ids)
+                logits = model.forward(input_ids)
             loss = compute_language_modeling_loss(input_ids, logits)
             (loss / grad_accumulation_steps).backward()
             loss_f = loss.item()
@@ -213,8 +213,10 @@ def train(
         # Update the model using the accumulated gradients
         optimizer.step()
         optimizer.zero_grad()
+
         
         loss_mean = np.mean(losses).item()
+        
 
         FLOPs_per_step = (
             model.flops_per_token
@@ -225,13 +227,18 @@ def train(
         t1 = time.time()
         dt = t1 - t0
         t0 = t1
+
+        # Prevent divide by zero error
+        tflops = FLOPs_per_step / dt / 1e12 if dt > 0.0 else 0
+        
         pbar.set_postfix(
             {
                 "train loss": f"{loss_mean:.2f}",
-                "TFLOPS": f"{FLOPs_per_step / dt / 1e12:.1f}",
+                "TFLOPS": f"{tflops:.1f}",
             }
         )
         wandb.log({"train-loss": loss_mean, "learning-rate": lr}, step=step)
+
 
 
 @torch.inference_mode()
