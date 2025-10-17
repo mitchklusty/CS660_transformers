@@ -1,0 +1,62 @@
+[
+  {
+    "config": "configs/embd64_layer4_head4_bs32_seq128_acc2_steps2000.yaml",
+    "n_embd": 64,
+    "n_layer": 4,
+    "n_head": 4,
+    "seq_len": 128,
+    "batch_size": 32,
+    "grad_accum": 2,
+    "steps": 2000,
+    "val_perplexity": 224.89578393768653,
+    "FLOPs": 1610612736000
+  },
+  {
+    "config": "configs/embd64_layer4_head4_bs32_seq96_acc2_steps2000.yaml",
+    "n_embd": 64,
+    "n_layer": 4,
+    "n_head": 4,
+    "seq_len": 96,
+    "batch_size": 32,
+    "grad_accum": 2,
+    "steps": 2000,
+    "val_perplexity": 231.03915753678646,
+    "FLOPs": 1207959552000
+  },
+  {
+    "config": "configs/embd80_layer3_head4_bs32_seq96_acc2_steps2000.yaml",
+    "n_embd": 80,
+    "n_layer": 3,
+    "n_head": 4,
+    "seq_len": 96,
+    "batch_size": 32,
+    "grad_accum": 2,
+    "steps": 2000,
+    "val_perplexity": 241.22681822639277,
+    "FLOPs": 1415577600000
+  },
+  {
+    "config": "configs/embd80_layer4_head4_bs32_seq96_acc2_steps2000.yaml",
+    "n_embd": 80,
+    "n_layer": 4,
+    "n_head": 4,
+    "seq_len": 96,
+    "batch_size": 32,
+    "grad_accum": 2,
+    "steps": 2000,
+    "val_perplexity": 242.88699489836117,
+    "FLOPs": 1887436800000
+  },
+  {
+    "config": "configs/embd64_layer3_head4_bs32_seq128_acc2_steps2000.yaml",
+    "n_embd": 64,
+    "n_layer": 3,
+    "n_head": 4,
+    "seq_len": 128,
+    "batch_size": 32,
+    "grad_accum": 2,
+    "steps": 2000,
+    "val_perplexity": 252.94902456551202,
+    "FLOPs": 1207959552000
+  }
+]

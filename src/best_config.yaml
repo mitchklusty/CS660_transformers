@@ -1,0 +1,16 @@
+output_dir: outputs/embd64_layer4_head4_bs32_seq128_acc2_steps2000
+device: auto
+tokenizer_encoding: gpt2
+seq_len: 128
+batch_size: 32
+grad_accumulation_steps: 2
+num_training_steps: 2000
+min_lr: 0.0001
+max_lr: 0.005
+num_warmup_steps: 10
+weight_decay: 0.01
+model_config:
+  n_embd: 64
+  n_head: 4
+  n_layer: 4
+  n_positions: 128
